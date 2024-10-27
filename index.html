@@ -1,0 +1,121 @@
+const SHEETS = {
+  'Miz': 'Miz',
+  'Wina': 'Wina',
+  'Grace': 'Grace',
+  'Andrea': 'Andrea'
+};
+
+function doPost(e) {
+  try {
+    Logger.log("Received POST request");
+    Logger.log(JSON.stringify(e.postData.contents));
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const params = JSON.parse(e.postData.contents);
+
+    const user = params.user;
+    const date = params.date;
+    const category = params.category;
+    const amount = parseFloat(params.amount);
+    const description = params.description;
+    const payment = params.payment;
+
+    // 檢查必要參數
+    if (!user || !date || !category || isNaN(amount) || !description || !payment) {
+      Logger.log("Missing or invalid parameters");
+      return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': 'Missing or invalid parameters' }))
+                           .setMimeType(ContentService.MimeType.JSON)
+                           .setHeader('Access-Control-Allow-Origin', '*');
+    }
+
+    // 檢查金額是否為正數
+    if (amount < 0) {
+      Logger.log("Amount must be positive");
+      return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': 'Amount must be positive' }))
+                           .setMimeType(ContentService.MimeType.JSON)
+                           .setHeader('Access-Control-Allow-Origin', '*');
+    }
+
+    // 檢查日期格式
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateRegex.test(date)) {
+      Logger.log("Invalid date format");
+      return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': 'Invalid date format' }))
+                           .setMimeType(ContentService.MimeType.JSON)
+                           .setHeader('Access-Control-Allow-Origin', '*');
+    }
+
+    // 確認使用者是否存在
+    if (!SHEETS.hasOwnProperty(user)) {
+      Logger.log("Invalid user: " + user);
+      return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': 'Invalid user' }))
+                           .setMimeType(ContentService.MimeType.JSON)
+                           .setHeader('Access-Control-Allow-Origin', '*');
+    }
+
+    const sheetName = SHEETS[user];
+    const sheet = ss.getSheetByName(sheetName);
+
+    if (!sheet) {
+      Logger.log("Sheet not found: " + sheetName);
+      return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': `Sheet ${sheetName} not found` }))
+                           .setMimeType(ContentService.MimeType.JSON)
+                           .setHeader('Access-Control-Allow-Origin', '*');
+    }
+
+    // 將數據添加到指定工作表
+    sheet.appendRow([user, date, category, amount, description, payment]);
+    Logger.log("Data appended to sheet: " + sheetName);
+
+    return ContentService.createTextOutput(JSON.stringify({ 'result': 'success' }))
+                         .setMimeType(ContentService.MimeType.JSON)
+                         .setHeader('Access-Control-Allow-Origin', '*');
+  } catch (error) {
+    Logger.log("Error: " + error.message);
+    return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': error.message }))
+                         .setMimeType(ContentService.MimeType.JSON)
+                         .setHeader('Access-Control-Allow-Origin', '*');
+  }
+}
+
+function doGet(e) {
+  try {
+    Logger.log("Received GET request");
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const records = [];
+
+    for (const user in SHEETS) {
+      const sheet = ss.getSheetByName(SHEETS[user]);
+      if (sheet) {
+        const data = sheet.getDataRange().getValues();
+        // 跳過表頭
+        data.slice(1).forEach(row => {
+          records.push({
+            user: row[0],
+            date: row[1],
+            category: row[2],
+            amount: row[3],
+            description: row[4],
+            payment: row[5]
+          });
+        });
+      }
+    }
+
+    const output = {
+      result: 'success',
+      data: records
+    };
+
+    Logger.log("Sending data: " + JSON.stringify(output));
+
+    return ContentService.createTextOutput(JSON.stringify(output))
+                         .setMimeType(ContentService.MimeType.JSON)
+                         .setHeader('Access-Control-Allow-Origin', '*');
+  } catch (error) {
+    Logger.log("Error: " + error.message);
+    return ContentService.createTextOutput(JSON.stringify({ 'result': 'error', 'error': error.message }))
+                         .setMimeType(ContentService.MimeType.JSON)
+                         .setHeader('Access-Control-Allow-Origin', '*');
+  }
+}
